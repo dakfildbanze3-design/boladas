@@ -14,6 +14,17 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Register Service Worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').then((registration) => {
+          console.log('SW registered: ', registration);
+        }).catch((registrationError) => {
+          console.log('SW registration failed: ', registrationError);
+        });
+      });
+    }
+
     const unsubscribe = auth.onAuthStateChanged((user) => {
       setUser(user);
       setLoading(false);

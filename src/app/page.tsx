@@ -9,6 +9,7 @@ import { collection, getDocs, query, orderBy, limit, startAfter, QueryDocumentSn
 import { formatRelativeTime } from '../lib/dateUtils';
 import { shareContent } from '../lib/shareUtils';
 import { chatService } from '../services/chatService';
+import AdBanner from '../components/AdBanner';
 
 const categories = ['TUDO', 'SAPATILHAS', 'ACESSÓRIOS', 'ROUPAS', 'SERVIÇOS', 'ELETRÔNICOS'];
 
@@ -63,6 +64,49 @@ export default function Home() {
   const [activeCategory, setActiveCategory] = useState<string>('TUDO');
   const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot | null>(null);
   const [hasMore, setHasMore] = useState(true);
+  
+  // Settings
+  const [hideShorts, setHideShorts] = useState(false);
+  const [showHideShortsPopup, setShowHideShortsPopup] = useState(false);
+
+  useEffect(() => {
+    const checkSettings = async () => {
+      if (auth.currentUser) {
+        try {
+          const { getDoc, doc } = await import('firebase/firestore');
+          const docSnap = await getDoc(doc(db, 'user_settings', auth.currentUser.uid));
+          if (docSnap.exists() && docSnap.data().hideShorts) {
+            setHideShorts(true);
+          }
+        } catch (error) {
+          console.error(error);
+        }
+      }
+    };
+    
+    // Check when auth state changes
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      if (user) checkSettings();
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleHideShorts = async () => {
+    if (!auth.currentUser) {
+      alert("Faça login para salvar suas preferências.");
+      router.push('/login');
+      return;
+    }
+    
+    try {
+      const { setDoc, doc } = await import('firebase/firestore');
+      await setDoc(doc(db, 'user_settings', auth.currentUser.uid), { hideShorts: true }, { merge: true });
+      setHideShorts(true);
+      setShowHideShortsPopup(false);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `user_settings/${auth.currentUser?.uid}`);
+    }
+  };
 
   // Infinite Scroll Observer setup
   const observer = useRef<IntersectionObserver | null>(null);
@@ -198,11 +242,40 @@ export default function Home() {
       </motion.section>
 
       {/* Destaques / Featured Cards */}
-      {!loading && products.length > 0 && products.some(p => p.productType === 'short' || p.videoUrl) && (
+      {!loading && !hideShorts && products.length > 0 && products.some(p => p.productType === 'short' || p.videoUrl) && (
         <section className="px-[4px] pt-1 pb-2 bg-surface">
-          <div className="flex items-center gap-2 px-2 py-3">
-            <Play size={20} className="text-blue-500" fill="currentColor" />
-            <h2 className="text-[20px] font-bold text-on-surface uppercase tracking-tight">SHORTS</h2>
+          <div className="flex items-center justify-between w-full px-2 py-3">
+            <div className="flex items-center gap-2">
+              <Play size={20} className="text-blue-500" fill="currentColor" />
+              <h2 className="text-[20px] font-bold text-on-surface tracking-tight">Shorts</h2>
+            </div>
+            <div className="relative">
+              <button 
+                onClick={() => setShowHideShortsPopup(!showHideShortsPopup)} 
+                className="text-white hover:text-gray-300 active:scale-95 transition-all outline-none"
+              >
+                <X size={20} strokeWidth={3} />
+              </button>
+              
+              <AnimatePresence>
+                {showHideShortsPopup && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.9, y: 10 }}
+                    className="absolute right-0 top-8 z-50 overflow-hidden"
+                  >
+                    <button 
+                      onClick={handleHideShorts}
+                      className="flex border border-outline-variant/30 items-center justify-center gap-2 px-4 py-2 bg-surface-container-high rounded-[8px] text-white font-bold tracking-tight shadow-md hover:bg-surface-container-highest whitespace-nowrap"
+                    >
+                      <X size={16} strokeWidth={3} className="text-white" />
+                      ESCONDER
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-[4px]">
             {products.filter((p: any) => p.productType === 'short' || p.videoUrl).slice(0, 2).map((product: any) => (
@@ -243,6 +316,9 @@ export default function Home() {
         </section>
       )}
 
+      {/* AdBanner before Product Feed */}
+      <AdBanner dataAdSlot="6870833164" />
+
       {/* Product Feed */}
       <div className="flex flex-col gap-[3px] bg-background">
         {loading ? (
@@ -261,16 +337,25 @@ export default function Home() {
           </div>
         ) : (
           <>
-            {products.filter((p: any) => !p.videoUrl && p.productType !== 'short').map((product) => (
-              <ProductItem 
-                key={product.id}
-                product={product}
-                onClick={() => router.push(`/product/${product.id}`)}
-                onMoreClick={(id, e) => {
-                  e.stopPropagation();
-                  setActiveOptionsId(id);
-                }}
-              />
+            {products.filter((p: any) => !p.videoUrl && p.productType !== 'short').map((product, index) => (
+              <React.Fragment key={product.id}>
+                <ProductItem 
+                  product={product}
+                  onClick={() => router.push(`/product/${product.id}`)}
+                  onMoreClick={(id, e) => {
+                    e.stopPropagation();
+                    setActiveOptionsId(id);
+                  }}
+                />
+                
+                {/* Insert Ad every 8 items */}
+                {(index + 1) % 8 === 0 && (
+                  <div className="bg-surface py-2">
+                    <p className="text-center text-[0.625rem] text-on-surface-variant/50 uppercase tracking-widest mb-2">Publicidade</p>
+                    <AdBanner dataAdSlot="6870833164" />
+                  </div>
+                )}
+              </React.Fragment>
             ))}
             
             {/* Infinite Scroll Loader Target */}

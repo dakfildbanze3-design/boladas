@@ -2,20 +2,20 @@
 @import "tw-animate-css";
 
 @theme {
-  --color-background: #131313;
-  --color-surface: #131313;
-  --color-surface-container: #1f1f1f;
-  --color-surface-container-low: #1b1b1b;
-  --color-surface-container-high: #2a2a2a;
-  --color-surface-container-highest: #353535;
-  --color-primary: #b8c3ff;
-  --color-primary-container: #2d5bff;
-  --color-on-primary-container: #efefff;
-  --color-on-surface: #e2e2e2;
-  --color-on-surface-variant: #c4c5d9;
-  --color-outline: #8e90a2;
-  --color-outline-variant: #434656;
-  --color-error: #ffb4ab;
+  --color-background: #000000;
+  --color-surface: #000000;
+  --color-surface-container: #111111;
+  --color-surface-container-low: #080808;
+  --color-surface-container-high: #1a1a1a;
+  --color-surface-container-highest: #262626;
+  --color-primary: #ffffff;
+  --color-primary-container: #1a1a1a;
+  --color-on-primary-container: #ffffff;
+  --color-on-surface: #ffffff;
+  --color-on-surface-variant: #a1a1aa;
+  --color-outline: #27272a;
+  --color-outline-variant: #18181b;
+  --color-error: #ff5555;
   
   --font-sans: var(--font-sans);
 }
