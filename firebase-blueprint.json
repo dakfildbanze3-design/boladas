@@ -1,0 +1,99 @@
+{
+  "entities": {
+    "users": {
+      "title": "User Profile",
+      "description": "Stores user profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "avatarUrl": { "type": "string", "format": "uri" },
+        "location": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "createdAt"]
+    },
+    "products": {
+      "title": "Product",
+      "description": "Stores product listings",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "price": { "type": "number" },
+        "category": { "type": "string" },
+        "images": { "type": "array", "items": { "type": "string", "format": "uri" } },
+        "sellerId": { "type": "string" },
+        "sellerPhone": { "type": "string" },
+        "location": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "price", "sellerId", "createdAt"]
+    },
+    "chats": {
+      "title": "Chat",
+      "description": "Stores user conversations",
+      "type": "object",
+      "properties": {
+        "participants": { "type": "array", "items": { "type": "string" } },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "lastMessage": { "type": "string" },
+        "otherUserName": { "type": "string" },
+        "otherUserAvatar": { "type": "string" },
+        "unread": { "type": "boolean" },
+        "unreadCount": { "type": "number" },
+        "online": { "type": "boolean" }
+      },
+      "required": ["participants"]
+    },
+    "notifications": {
+      "title": "Notification",
+      "description": "Stores user notifications and alerts",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["like", "comment", "follow"] },
+        "fromUserId": { "type": "string" },
+        "toUserId": { "type": "string" },
+        "postId": { "type": "string" },
+        "text": { "type": "string" },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["type", "fromUserId", "toUserId", "text", "read", "createdAt"]
+    },
+    "user_settings": {
+      "title": "User Settings",
+      "description": "Stores user application preferences",
+      "type": "object",
+      "properties": {
+        "pushNotifications": { "type": "boolean" },
+        "invisibleProfile": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "users",
+      "description": "User profile documents"
+    },
+    "user_settings/{userId}": {
+      "schema": "user_settings",
+      "description": "User settings documents"
+    },
+    "products/{productId}": {
+      "schema": "products",
+      "description": "Product listing documents"
+    },
+    "chats/{chatId}": {
+      "schema": "chats",
+      "description": "User conversation documents"
+    },
+    "notifications/{notificationId}": {
+      "schema": "notifications",
+      "description": "User notification documents"
+    }
+  }
+}
