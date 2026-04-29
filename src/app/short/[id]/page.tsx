@@ -1,762 +1,222 @@
 "use client";
 
+export const dynamic = 'force-dynamic';
+
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronDown, Loader2, ThumbsUp, ThumbsDown, MessageSquare, Share2, Bookmark, ShoppingBag, X, Send, MapPin, Phone, Tag } from 'lucide-react';
+import { Heart, Share2, MessageSquare, ArrowLeft, MoreVertical, Play } from 'lucide-react';
 import { useRouter, useParams } from 'next/navigation';
-import { motion, AnimatePresence } from 'motion/react';
-import { db, handleFirestoreError, OperationType, auth } from '../../../lib/firebase';
-import { doc, getDoc, collection, query, limit, getDocs, addDoc, serverTimestamp, onSnapshot, orderBy, updateDoc, arrayUnion, arrayRemove, increment } from 'firebase/firestore';
-import { checkIsFollowing, followUser, unfollowUser } from '../../../services/followService';
-import { notificationService } from '../../../services/notificationService';
-import { formatRelativeTime } from '../../../lib/dateUtils';
+import { auth, db, handleFirestoreError, OperationType } from '../../../lib/firebase';
+import { doc, getDoc, collection, query, limit, getDocs, where } from 'firebase/firestore';
 import { shareContent } from '../../../lib/shareUtils';
-import { chatService } from '../../../services/chatService';
+import { formatRelativeTime } from '../../../lib/dateUtils';
+import { motion, AnimatePresence } from 'motion/react';
 
-type CommentType = {
-  id: string;
-  username: string;
-  avatar: string;
-  time: string;
-  text: string;
-  likes: number;
-  userLiked: boolean;
-  userDisliked: boolean;
-  replies: CommentType[];
-};
-
-export default function ShortPlayer() {
+export default function ReelsFeed() {
   const router = useRouter();
   const params = useParams();
-  const id = params.id as string;
+  const initialId = params.id as string;
   
-  const [product, setProduct] = useState<any>(null);
+  const [reels, setReels] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isFollowing, setIsFollowing] = useState(false);
-  const [followLoading, setFollowLoading] = useState(false);
-  const [isLiked, setIsLiked] = useState(false);
-  const [likeLoading, setLikeLoading] = useState(false);
-  const [relatedVideos, setRelatedVideos] = useState<any[]>([]);
-  const [isTextExpanded, setIsTextExpanded] = useState(false);
-  const [isCommentsOpen, setIsCommentsOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
   
-  // Comments logic
-  const [comments, setComments] = useState<CommentType[]>([]);
-  const [commentText, setCommentText] = useState('');
-  const [replyingTo, setReplyingTo] = useState<{id: string, username: string} | null>(null);
-  const commentInputRef = useRef<HTMLInputElement>(null);
-
   useEffect(() => {
-    if (!id) return;
-    const commentsRef = collection(db, 'products', id, 'comments');
-    const q = query(commentsRef, orderBy('createdAt', 'desc'));
-    
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-        const allComments: any[] = [];
-        snapshot.forEach(docSnap => {
-            allComments.push({ id: docSnap.id, ...docSnap.data() });
-        });
-        
-        const topLevel = allComments.filter(c => !c.parentId);
-        const rawReplies = allComments.filter(c => c.parentId).sort((a,b) => (a.createdAt?.toDate?.()?.getTime() || 0) - (b.createdAt?.toDate?.()?.getTime() || 0));
-
-        const formatted: CommentType[] = topLevel.map(c => {
-            const cReplies = rawReplies.filter(r => r.parentId === c.id);
-            return {
-                id: c.id,
-                username: c.username,
-                avatar: c.avatar,
-                time: formatRelativeTime(c.createdAt),
-                text: c.text,
-                likes: c.likedBy?.length || 0,
-                userLiked: auth.currentUser ? (c.likedBy || []).includes(auth.currentUser.uid) : false,
-                userDisliked: auth.currentUser ? (c.dislikedBy || []).includes(auth.currentUser.uid) : false,
-                replies: cReplies.map(r => ({
-                    id: r.id,
-                    username: r.username,
-                    avatar: r.avatar,
-                    time: formatRelativeTime(r.createdAt),
-                    text: r.text,
-                    likes: r.likedBy?.length || 0,
-                    userLiked: auth.currentUser ? (r.likedBy || []).includes(auth.currentUser.uid) : false,
-                    userDisliked: auth.currentUser ? (r.dislikedBy || []).includes(auth.currentUser.uid) : false,
-                    replies: []
-                }))
-            };
-        });
-        setComments(formatted);
-    });
-
-    return () => unsubscribe();
-  }, [id, auth.currentUser?.uid]);
-
-  const toggleLike = async (commentId: string, parentId: string | null = null) => {
-    if (!auth.currentUser) {
-        alert("Faça login para curtir.");
-        return;
-    }
-    if (!id) return;
-    
-    const uid = auth.currentUser.uid;
-    let targetComment;
-    if (parentId) {
-        const p = comments.find(c => c.id === parentId);
-        targetComment = p?.replies.find(r => r.id === commentId);
-    } else {
-        targetComment = comments.find(c => c.id === commentId);
-    }
-    if (!targetComment) return;
-
-    const commentRef = doc(db, 'products', id, 'comments', commentId);
-    if (targetComment.userLiked) {
-        await updateDoc(commentRef, { likedBy: arrayRemove(uid) });
-    } else {
-        await updateDoc(commentRef, { likedBy: arrayUnion(uid), dislikedBy: arrayRemove(uid) });
-    }
-  };
-
-  const toggleDislike = async (commentId: string, parentId: string | null = null) => {
-    if (!auth.currentUser) {
-        alert("Faça login para não curtir.");
-        return;
-    }
-    if (!id) return;
-
-    const uid = auth.currentUser.uid;
-    let targetComment;
-    if (parentId) {
-        const p = comments.find(c => c.id === parentId);
-        targetComment = p?.replies.find(r => r.id === commentId);
-    } else {
-        targetComment = comments.find(c => c.id === commentId);
-    }
-    if (!targetComment) return;
-
-    const commentRef = doc(db, 'products', id, 'comments', commentId);
-    if (targetComment.userDisliked) {
-        await updateDoc(commentRef, { dislikedBy: arrayRemove(uid) });
-    } else {
-        await updateDoc(commentRef, { dislikedBy: arrayUnion(uid), likedBy: arrayRemove(uid) });
-    }
-  };
-
-  const handleReplyClick = (commentId: string, username: string) => {
-    setReplyingTo({ id: commentId, username });
-    setTimeout(() => {
-        commentInputRef.current?.focus();
-    }, 100);
-  };
-
-  const handleSendComment = async () => {
-    if (!commentText.trim()) return;
-    if (!auth.currentUser) {
-        alert("Faça login para comentar.");
-        return;
-    }
-    if (!id) return;
-
-    const textToSave = commentText.trim();
-    setCommentText('');
-    setReplyingTo(null);
-
-    try {
-        const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
-        const userData = userDoc.data() || {};
-        const usernameStr = userData.displayName || auth.currentUser.displayName;
-        const finalUsername = usernameStr ? `@${usernameStr.toLowerCase().replace(/\s+/g, '')}` : '@usuario';
-        const finalAvatar = userData.avatarUrl || auth.currentUser.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${auth.currentUser.uid}`;
-
-        await addDoc(collection(db, 'products', id, 'comments'), {
-            text: textToSave,
-            userId: auth.currentUser.uid,
-            username: finalUsername,
-            avatar: finalAvatar,
-            parentId: replyingTo ? replyingTo.id : null,
-            likedBy: [],
-            dislikedBy: [],
-            createdAt: serverTimestamp()
-        });
-
-        // Trigger Notification
-        if (product?.sellerId) {
-            notificationService.createNotification({
-                type: 'comment',
-                toUserId: product.sellerId,
-                postId: id,
-                text: `comentou no seu post: "${textToSave.substring(0, 30)}${textToSave.length > 30 ? '...' : ''}"`
-            });
-        }
-    } catch (error) {
-        console.error("Erro ao adicionar comentário:", error);
-        alert("Erro ao adicionar comentário.");
-    }
-  };
-
-  useEffect(() => {
-    const incrementView = async () => {
-      if (!id) return;
+    const fetchReels = async () => {
       try {
-        const docRef = doc(db, 'products', id);
-        await updateDoc(docRef, {
-          views: increment(1)
-        });
-      } catch (e) {
-        console.error("Erro ao incrementar visualizações:", e);
-      }
-    };
-    
-    const fetchVideoAndRelated = async () => {
-      if (!id) return;
-      try {
-        // Fetch current video
-        const docRef = doc(db, 'products', id);
-        const docSnap = await getDoc(docRef);
-        
-        if (docSnap.exists()) {
-          const productData = docSnap.data();
-          setProduct({ id: docSnap.id, ...productData });
-          
-          if (auth.currentUser) {
-            setIsLiked((productData.likedBy || []).includes(auth.currentUser.uid));
+        setLoading(true);
+        // Load the initial one
+        let initialDoc = null;
+        if (initialId) {
+          const docRef = doc(db, 'products', initialId);
+          const snap = await getDoc(docRef);
+          if (snap.exists()) {
+              initialDoc = { id: snap.id, ...snap.data() };
           }
-          
-          // Increment view count
-          incrementView();
         }
-
-        // Fetch related videos
-        const q = query(collection(db, 'products'), limit(30));
-        const relSnap = await getDocs(q);
-        const related = relSnap.docs
-            .map(d => ({ id: d.id, ...d.data() }))
-            .filter((p: any) => p.id !== id && (p.videoUrl || p.productType === 'short'));
-        setRelatedVideos(related);
         
+        // Load some more shorts
+        const q = query(collection(db, 'products'), where('productType', '==', 'short'), limit(15));
+        const relSnap = await getDocs(q);
+        const fetchedReels = relSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        
+        let finalReels = [];
+        if (initialDoc) {
+             finalReels = [initialDoc, ...fetchedReels.filter(r => r.id !== initialId)];
+        } else {
+             finalReels = fetchedReels;
+        }
+        setReels(finalReels);
       } catch (error) {
-        handleFirestoreError(error, OperationType.GET, `products/${id}`);
+        handleFirestoreError(error, OperationType.GET, 'products');
       } finally {
         setLoading(false);
       }
     };
+    fetchReels();
+  }, [initialId]);
 
-    fetchVideoAndRelated();
-  }, [id]);
-
-  useEffect(() => {
-    const fetchFollowStatus = async () => {
-      if (product?.sellerId && auth.currentUser) {
-        try {
-          const status = await checkIsFollowing(auth.currentUser.uid, product.sellerId);
-          setIsFollowing(status);
-        } catch (e) {
-          console.error(e);
-        }
-      }
-    };
-    fetchFollowStatus();
-  }, [product?.sellerId]);
-
-  const handleFollowToggle = async () => {
-    if (!auth.currentUser) {
-      alert("Faça login para seguir usuários");
-      router.push('/login');
-      return;
-    }
-    if (product.sellerId === auth.currentUser.uid) return;
-
-    setFollowLoading(true);
-    const previousState = isFollowing;
-    setIsFollowing(!isFollowing);
-
-    try {
-      if (previousState) {
-        await unfollowUser(product.sellerId);
-      } else {
-        await followUser(product.sellerId);
-      }
-    } catch (error) {
-      setIsFollowing(previousState);
-      console.error("Erro", error);
-    } finally {
-      setFollowLoading(false);
-    }
-  };
-
-  const handleLikePost = async () => {
-    if (!auth.currentUser || !id || !product) {
-      if (!auth.currentUser) alert("Faça login para curtir.");
-      return;
-    }
-
-    setLikeLoading(true);
-    const previousState = isLiked;
-    const uid = auth.currentUser.uid;
-    setIsLiked(!isLiked);
-
-    try {
-      const docRef = doc(db, 'products', id);
-      if (previousState) {
-        await updateDoc(docRef, { likedBy: arrayRemove(uid) });
-      } else {
-        await updateDoc(docRef, { likedBy: arrayUnion(uid) });
-        // Trigger Notification
-        notificationService.createNotification({
-          type: 'like',
-          toUserId: product.sellerId,
-          postId: id,
-          text: 'curtiu seu post'
-        });
-      }
-    } catch (error) {
-      setIsLiked(previousState);
-      console.error("Erro ao curtir:", error);
-    } finally {
-      setLikeLoading(false);
-    }
-  };
-
-  const handleMessageClick = async () => {
-    if (!auth.currentUser) {
-      alert("Faça login para enviar mensagens");
-      router.push('/login');
-      return;
-    }
-    if (!product?.sellerId) return;
-
-    try {
-      const chatId = await chatService.getOrCreateChat(
-        product.sellerId,
-        product.sellerName,
-        product.sellerAvatar
-      );
-      router.push(`/chat/${chatId}`);
-    } catch (error: any) {
-      alert(error.message);
-    }
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+     const height = e.currentTarget.clientHeight;
+     const scrollTop = e.currentTarget.scrollTop;
+     const index = Math.round(scrollTop / height);
+     if (index !== activeIndex && index >= 0 && index < reels.length) {
+         setActiveIndex(index);
+     }
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 size={32} className="animate-spin text-primary" />
+      <div className="h-[100dvh] w-full bg-black flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
       </div>
     );
   }
 
-  if (!product) {
+  if (reels.length === 0) {
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center text-on-surface">
-        <p className="mb-4 font-medium">Vídeo não encontrado.</p>
-        <button onClick={() => router.back()} className="bg-primary text-on-primary px-4 py-2 rounded-[3px] font-bold">
-            Voltar
-        </button>
+      <div className="h-[100dvh] w-full bg-black flex flex-col items-center justify-center text-white">
+        <p className="mb-4 text-sm font-bold uppercase tracking-widest text-white/50">Nenhum short encontrado</p>
+        <button onClick={() => router.back()} className="px-6 py-3 bg-white/10 rounded-full font-bold uppercase tracking-widest text-[0.75rem]">Voltar</button>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background pb-12 w-full max-w-md mx-auto">
-      {/* Video Box (16:9 Standard Player) */}
-      <div className="w-full aspect-video bg-black sticky top-0 z-40 relative group">
-        {product.videoUrl ? (
-            <video 
-              src={product.videoUrl} 
-              className="w-full h-full object-contain"
-              controls
-              autoPlay
-              playsInline
-            />
-        ) : (
-            <div className="w-full h-full flex items-center justify-center">
-                <img src={product.image || product.images?.[0]} className="w-full h-full object-cover opacity-80" alt="Short" />
-            </div>
-        )}
-        
-        {/* Top Back/Minimize Button - appears overlaid like YouTube minimize video */}
-        <button 
-          onClick={() => router.back()}
-          className="absolute top-3 left-3 p-1.5 bg-black/40 hover:bg-black/60 backdrop-blur-sm rounded-full text-white z-50 transition-colors shadow-lg"
-        >
-          <ChevronDown size={28} />
-        </button>
-      </div>
-
-      <div className="h-[1px] w-full bg-outline-variant/10" />
-
-      {/* Info details */}
-      <div className="px-4 py-2.5">
-         {/* Badges Row (Price, Location, Phone, Category) */}
-         <div className="flex flex-wrap items-center gap-1.5 mb-2.5">
-            {/* Price Badge - High Visibility */}
-            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-900 border border-blue-800 rounded-[3px] text-[0.8125rem] text-white font-bold shadow-md">
-               <ShoppingBag size={14} className="opacity-80" />
-               <span>{product.price} MT</span>
-            </div>
-            
-            {product.location && (
-               <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white/15 rounded-[3px] text-[0.75rem] text-white/90 font-medium shadow-sm border border-white/5">
-                  <MapPin size={14} className="opacity-70" />
-                  <span>{product.location}</span>
-               </div>
-            )}
-            {product.sellerPhone && (
-               <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white/15 rounded-[3px] text-[0.75rem] text-white/90 font-medium shadow-sm border border-white/5">
-                  <Phone size={14} className="opacity-70" />
-                  <span>{product.sellerPhone}</span>
-               </div>
-            )}
-            {product.category && (
-               <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white/15 rounded-[3px] text-[0.75rem] text-primary font-bold shadow-sm border border-primary/20">
-                  <Tag size={14} className="opacity-70" />
-                  <span>{product.category}</span>
-               </div>
-            )}
-         </div>
-
-         {/* Product Info Block: Avatar | Divider | Name - Description */}
-         <div className="flex items-center mb-3">
-            <img 
-               src={product.sellerAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${product.sellerId}`} 
-               className="w-[52px] h-[52px] rounded-full object-cover border-2 border-primary/20 shrink-0 cursor-pointer shadow-md" 
-               referrerPolicy="no-referrer"
-               onClick={() => router.push(`/user/${product.sellerId}`)}
-               alt="Seller"
-            />
-            
-            {/* 1px Vertical Separator */}
-            <div className="w-[1px] h-[36px] bg-outline-variant/20 mx-2.5" />
-
-            <div className="flex-1 min-w-0 flex flex-col">
-               {/* Product Details: Name - Description */}
-               <p 
-                  onClick={() => setIsTextExpanded(!isTextExpanded)}
-                  className={`text-[0.9375rem] leading-relaxed text-on-surface cursor-pointer transition-all ${isTextExpanded ? '' : 'line-clamp-2'}`}
-               >
-                 <span className="font-bold">{product.name}</span> - <span className="opacity-90">{product.description}</span>
-               </p>
-            </div>
-         </div>
-
-         <div className="h-[1px] w-full bg-outline-variant/10 mb-3" />
-
-         {/* Stats and Actions Row */}
-         <div className="flex items-center justify-between">
-            <div className="flex flex-col flex-1 min-w-0">
-               <div className="text-[0.75rem] text-on-surface-variant flex items-center gap-1.5 font-medium truncate">
-                  <span 
-                     onClick={() => router.push(`/user/${product.sellerId}`)}
-                     className="font-bold text-on-surface/80 cursor-pointer hover:underline"
-                  >
-                     {product.sellerName || 'Vendedor'}
-                  </span>
-                  <span className="opacity-50">•</span>
-                  <span>{product.views || 0} visualizações</span>
-                  <span className="opacity-50">•</span>
-                  <span>{product.createdAt ? formatRelativeTime(product.createdAt) : 'há pouco'}</span>
-               </div>
-            </div>
-            
-            {/* Right: Follow, Like & Share */}
-            <div className="flex items-center gap-1 pl-2">
-                <button 
-                  onClick={handleLikePost}
-                  disabled={likeLoading}
-                  className={`w-8 h-8 flex items-center justify-center rounded-full transition-all active:scale-95 ${
-                    isLiked ? 'text-blue-900' : 'text-on-surface hover:bg-surface-container'
-                  }`}
-                >
-                   <ThumbsUp size={20} className={isLiked ? 'fill-blue-900' : ''} />
-                </button>
-
-                {(!auth.currentUser || product.sellerId !== auth.currentUser.uid) && (
-                    <button 
-                      onClick={handleFollowToggle}
-                      disabled={followLoading}
-                      className={`px-4 h-8 text-[0.8125rem] font-bold flex items-center justify-center rounded-full transition-all active:scale-95 ${
-                        isFollowing 
-                          ? 'text-on-surface-variant border border-outline-variant/30 bg-surface-container' 
-                          : 'text-white bg-blue-900 shadow-md hover:brightness-110'
-                      }`}
-                    >
-                      {isFollowing ? 'SEGUINDO' : 'SEGUIR'}
-                    </button>
-                )}
-                <button 
-                  onClick={() => {
-                    if (product) {
-                      shareContent(
-                        product.name,
-                        `Olha este vídeo no Bazar: ${product.name}`,
-                        `${window.location.origin}/short/${product.id}`
-                      );
-                    }
-                  }}
-                  className="w-8 h-8 flex items-center justify-center text-on-surface hover:bg-surface-container rounded-full transition-colors flex-shrink-0 active:scale-95"
-                >
-                   <Share2 size={20} />
-                </button>
-            </div>
-         </div>
-
-         <div className="h-[1px] w-full bg-outline-variant/10 mt-3" />
-
-         {/* Youtube Style Comments Box immediately under the info row */}
-         <div 
-            onClick={() => setIsCommentsOpen(true)}
-            className="bg-zinc-900/40 rounded-[12px] p-3 mt-3 w-full cursor-pointer hover:bg-zinc-800 transition-colors border border-white/5"
-         >
-            <div className="flex items-center gap-2 mb-2">
-                <span className="text-[0.875rem] font-bold text-white">Comentários</span>
-                <span className="text-[0.75rem] text-white/40">{comments.reduce((acc, c) => acc + 1 + c.replies.length, 0)}</span>
-            </div>
-            <div className="flex gap-2 items-start">
-               {comments.length > 0 ? (
-                 <>
-                   <img 
-                     src={comments[0].avatar} 
-                     alt="Avatar Comentário" 
-                     className="w-6 h-6 rounded-full bg-zinc-800 flex-shrink-0 object-cover border border-white/10"
-                     referrerPolicy="no-referrer"
-                   />
-                   <p className="text-[0.8125rem] text-white/90 line-clamp-2 leading-snug">
-                      <span className="font-bold mr-1.5 opacity-60 text-white">{comments[0].username}</span>
-                      {comments[0].text}
-                   </p>
-                 </>
-               ) : (
-                 <p className="text-[0.8125rem] text-white/40 italic">
-                    Sê o primeiro a comentar...
-                  </p>
-               )}
-            </div>
-         </div>
-
-         {/* Extra Actions for the Product (WhatsApp / Chat) - Hidden if own post */}
-         {auth.currentUser?.uid !== product?.sellerId && (
-           <div className="flex items-center gap-2 mt-4 pt-4 border-t border-white/5">
-            <button 
-                onClick={() => {
-                   const phoneStr = product?.sellerPhone || '';
-                   const cleanPhone = phoneStr.replace(/\D/g, '');
-                   if (cleanPhone) {
-                       window.open(`https://wa.me/${cleanPhone}`, '_blank');
-                   } else {
-                       alert('O vendedor não disponibilizou número de WhatsApp.');
-                   }
-                }}
-                className="flex items-center gap-1.5 px-4 h-9 bg-green-600 rounded-[4px] hover:bg-green-700 transition-colors flex-1 justify-center shadow-sm text-white font-bold text-[0.8125rem]"
-            >
-               WhatsApp
-            </button>
-            <button 
-                onClick={handleMessageClick}
-                className="flex items-center gap-1.5 px-4 h-9 bg-zinc-600 rounded-[4px] hover:bg-zinc-700 transition-colors flex-1 justify-center shadow-sm text-white font-bold text-[0.8125rem]"
-            >
-               Mensagem
-            </button>
-         </div>
-         )}
-      </div>
-
-      {/* Up Next List (Single Card full width feed with avatar, strictly video) */}
-      <div className="border-t border-outline-variant/10 bg-surface">
-         <div className="flex flex-col gap-0">
-            {relatedVideos.map((item, index) => (
-                <div 
-                  key={`related-${item.id}-${index}`}
-                  className="w-full bg-background pb-1.5 border-b border-outline-variant/5"
-                >
-                  {/* Video Content FIRST */}
-                  <div 
-                     className="relative w-full aspect-video bg-black cursor-pointer"
-                     onClick={() => {
-                        router.push(`/short/${item.id}`);
-                        window.scrollTo(0,0);
-                     }}
-                  >
-                     <video 
-                        src={item.videoUrl} 
-                        className="w-full h-full object-cover"
-                        muted
-                        loop
-                        playsInline
-                     />
-                     {/* Overlay Stats/Video Tag */}
-                     <div className="absolute top-2 right-2 bg-black/60 text-white text-[0.625rem] font-bold px-2 py-1 rounded-[4px] tracking-wider uppercase">
-                        VÍDEO
-                     </div>
-                  </div>
-
-                  {/* Title & Avatar Details BELOW Video */}
-                  <div className="px-3 mt-1.5 pb-1 pt-0 flex items-center">
-                     <img 
-                        src={item.sellerAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${item.sellerId}`} 
-                        className="w-9 h-9 rounded-full object-cover border border-outline-variant/30 flex-shrink-0" 
-                        referrerPolicy="no-referrer"
-                        onClick={() => router.push(`/user/${item.sellerId}`)}
-                        alt="Seller"
-                     />
-                     
-                     <div className="w-[1px] h-[32px] bg-outline-variant/10 mx-2" />
-
-                     <div className="flex flex-col flex-1 min-w-0">
-                        {/* Unified Product Info */}
-                        <div className="flex flex-col">
-                           <h3 className="text-[0.9375rem] leading-snug text-on-surface line-clamp-2 cursor-pointer">
-                              <span className="font-bold">{item.name}</span> - <span className="text-on-surface-variant">{item.description}</span>
-                           </h3>
-                        </div>
-                     </div>
-                  </div>
-
-                  {/* Horizontal Divider between Info and Stats */}
-                  <div className="h-[1px] w-[calc(100%-24px)] mx-auto bg-outline-variant/5 my-1" />
-                  
-                  <div className="px-3 flex flex-wrap items-center justify-between">
-                     <div className="flex flex-wrap items-center gap-1.5 mb-1">
-                        {/* Price Badge in related card */}
-                        <div className="px-2 py-0.5 bg-blue-900/10 rounded-[3px] text-[0.75rem] text-blue-800 font-bold border border-blue-900/20">
-                           {item.price} MT
-                        </div>
-                        {item.category && (
-                           <span className="px-2 py-0.5 bg-white/10 rounded-[3px] text-[0.6875rem] text-primary font-bold border border-primary/20">
-                              {item.category}
-                           </span>
-                        )}
-                     </div>
-
-                     <div className="flex items-center gap-1.5 text-[0.75rem] text-on-surface-variant font-medium mb-2">
-                        <span className="font-bold text-on-surface/60 hover:underline cursor-pointer" onClick={() => router.push(`/user/${item.sellerId}`)}>
-                           {item.sellerName || 'Vendedor'}
-                        </span>
-                           <span className="opacity-40">•</span>
-                           <span>{item.views || 0} visualizações</span>
-                           <span className="opacity-40">•</span>
-                           <span>{item.createdAt ? formatRelativeTime(item.createdAt) : 'há pouco'}</span>
-                        </div>
-                     </div>
-                  </div>
-               ))}
-            </div>
-         </div>
-
-      {/* Comments Full Screen (Preta Brilhante) */}
-      <AnimatePresence>
-      {isCommentsOpen && (
-          <motion.div 
-            initial={{ y: '100%' }}
-            animate={{ y: 0 }}
-            exit={{ y: '100%' }}
-            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="fixed inset-0 z-50 bg-gradient-to-br from-[#1a1a1a] via-[#0a0a0a] to-black flex flex-col pointer-events-auto h-screen w-full"
+    <div className="h-[100dvh] w-full bg-black relative">
+       {/* Top Header Floating */}
+       <div className="absolute top-0 left-0 w-full z-50 p-4 pt-safe flex items-center justify-between pointer-events-none">
+          <button 
+             onClick={() => router.push('/')}
+             className="w-10 h-10 flex items-center justify-center bg-black/30 backdrop-blur-md rounded-full text-white pointer-events-auto active:scale-95 transition-transform"
           >
-            {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-white/10 bg-black/40 backdrop-blur-md shrink-0">
-              <h2 className="text-[1.125rem] font-bold text-white">Comentários</h2>
-              <button 
-                 onClick={() => setIsCommentsOpen(false)} 
-                 className="p-2 hover:bg-white/10 rounded-full text-white transition-colors"
-                 aria-label="Gravar e Sair"
-              >
-                <X size={24} />
-              </button>
-            </div>
-            
-            {/* Comments List */}
-            <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-6">
-               {comments.map((comment) => (
-                  <div key={comment.id} className="flex flex-col gap-3">
-                     <div className="flex gap-3">
-                        <img src={comment.avatar} className="w-8 h-8 rounded-full border border-white/20 shrink-0 object-cover" alt="Avatar" />
-                        <div className="flex-1 min-w-0">
-                           <div className="mb-0.5">
-                              <span className="text-[0.8125rem] font-bold text-white/60 mr-2">{comment.username}</span>
-                              <span className="text-[0.75rem] text-white/40">{comment.time}</span>
-                           </div>
-                           <p className="text-[0.875rem] text-white/90 leading-snug break-words">{comment.text}</p>
-                           {/* Action Line */}
-                           <div className="flex items-center gap-4 mt-2 text-white/60">
-                              <button onClick={() => toggleLike(comment.id)} className={`flex items-center gap-1.5 transition-colors ${comment.userLiked ? 'text-blue-900 font-bold' : 'hover:text-white'}`}>
-                                 <ThumbsUp size={14} className={comment.userLiked ? 'fill-blue-900' : ''} />
-                                 <span className="text-[0.75rem]">{comment.likes > 0 ? comment.likes : ''}</span>
-                              </button>
-                              <button onClick={() => toggleDislike(comment.id)} className={`flex items-center gap-1.5 transition-colors ${comment.userDisliked ? 'text-blue-900 font-bold' : 'hover:text-white'}`}>
-                                 <ThumbsDown size={14} className={comment.userDisliked ? 'fill-blue-900' : ''} />
-                              </button>
-                              <button onClick={() => handleReplyClick(comment.id, comment.username)} className="text-[0.75rem] font-bold hover:text-white transition-colors">Responder</button>
-                           </div>
-                        </div>
-                     </div>
-                     
-                     {/* Replies */}
-                     {comment.replies.map(reply => (
-                        <div key={reply.id} className="flex gap-3 ml-11 relative">
-                           {/* Connecting Line */}
-                           <div className="absolute -left-7 top-0 w-6 h-6 border-l-2 border-b-2 border-white/20 rounded-bl-[12px]"></div>
-                           
-                           <img src={reply.avatar} className="w-7 h-7 rounded-full border border-white/20 shrink-0 object-cover" alt="Avatar" />
-                           <div className="flex-1 min-w-0">
-                              <div className="mb-0.5">
-                                <span className="text-[0.8125rem] font-bold text-white/60 mr-2">{reply.username}</span>
-                                <span className="text-[0.75rem] text-white/40">{reply.time}</span>
-                              </div>
-                              <p className="text-[0.875rem] text-white/90 leading-snug break-words">{reply.text}</p>
-                              {/* Action Line */}
-                              <div className="flex items-center gap-4 mt-2 text-white/60">
-                                 <button onClick={() => toggleLike(reply.id, comment.id)} className={`flex items-center gap-1.5 transition-colors ${reply.userLiked ? 'text-blue-900 font-bold' : 'hover:text-white'}`}>
-                                    <ThumbsUp size={14} className={reply.userLiked ? 'fill-blue-900' : ''} />
-                                    <span className="text-[0.75rem]">{reply.likes > 0 ? reply.likes : ''}</span>
-                                 </button>
-                                 <button onClick={() => toggleDislike(reply.id, comment.id)} className={`flex items-center gap-1.5 transition-colors ${reply.userDisliked ? 'text-blue-900 font-bold' : 'hover:text-white'}`}>
-                                    <ThumbsDown size={14} className={reply.userDisliked ? 'fill-blue-900' : ''} />
-                                 </button>
-                                 {/* Only single level nesting for replies */}
-                                 <button onClick={() => handleReplyClick(comment.id, reply.username)} className="text-[0.75rem] font-bold hover:text-white transition-colors">Responder</button>
-                              </div>
-                           </div>
-                        </div>
-                     ))}
-                  </div>
-               ))}
-            </div>
+             <ArrowLeft size={24} />
+          </button>
+       </div>
 
-            {/* Input area Footer */}
-            <div className="flex flex-col bg-black shrink-0 border-t border-white/5">
-               {replyingTo && (
-                  <div className="px-4 py-2 bg-white/5 flex items-center justify-between">
-                     <span className="text-[0.75rem] text-white/50">
-                        A responder a <span className="font-bold text-white/80">{replyingTo.username}</span>
-                     </span>
-                     <button onClick={() => setReplyingTo(null)} className="text-white/40 hover:text-white p-1">
-                        <X size={14} />
-                     </button>
-                  </div>
-               )}
-               <div className="p-3 flex items-center gap-3">
-                 <img src={auth.currentUser?.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${auth.currentUser?.uid || 'guest'}`} className="w-8 h-8 rounded-full bg-zinc-800 shrink-0 object-cover border border-white/10" alt="Me" />
-                 <div className="flex-1 bg-zinc-900 rounded-full flex items-center px-4 h-10 border border-white/10">
-                   <input 
-                      ref={commentInputRef}
-                      value={commentText}
-                      onChange={(e) => setCommentText(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleSendComment()}
-                      type="text" 
-                      placeholder="Adicione um comentário..." 
-                      className="bg-transparent border-none outline-none w-full text-[0.875rem] text-white placeholder:text-white/30" 
-                   />
-                   <button 
-                      onClick={handleSendComment}
-                      disabled={!commentText.trim()}
-                      className={`ml-2 w-7 h-7 flex items-center justify-center shrink-0 rounded-full transition-all ${commentText.trim() ? 'bg-blue-900 text-white' : 'opacity-20 text-white'}`}
-                   >
-                      <Send size={14} fill="currentColor" />
-                   </button>
-                 </div>
-               </div>
-               <div className="h-6" /> {/* Spacer for bottom area */}
-            </div>
-          </motion.div>
-      )}
-      </AnimatePresence>
+       {/* Feed Container */}
+       <div 
+          className="h-full w-full overflow-y-auto snap-y snap-mandatory hide-scrollbar"
+          onScroll={handleScroll}
+       >
+         {reels.map((reel, index) => (
+           <ReelItem key={reel.id} reel={reel} isActive={index === activeIndex} router={router} />
+         ))}
+       </div>
     </div>
   );
+}
+
+function ReelItem({ reel, isActive, router }: { reel: any, isActive: boolean, router: any }) {
+   const videoRef = useRef<HTMLVideoElement>(null);
+   const [isPlaying, setIsPlaying] = useState(false);
+   
+   useEffect(() => {
+     if (isActive) {
+        if (videoRef.current) {
+          videoRef.current.currentTime = 0;
+          videoRef.current.play().catch(e => console.log('Autoplay blocked', e));
+          setIsPlaying(true);
+        }
+     } else {
+        if (videoRef.current) {
+          videoRef.current.pause();
+          setIsPlaying(false);
+        }
+     }
+   }, [isActive]);
+
+   const togglePlay = () => {
+       if (videoRef.current) {
+           if (isPlaying) {
+               videoRef.current.pause();
+               setIsPlaying(false);
+           } else {
+               videoRef.current.play();
+               setIsPlaying(true);
+           }
+       }
+   };
+
+   return (
+      <div className="h-[100dvh] w-full snap-always snap-center relative bg-zinc-900 overflow-hidden flex items-center justify-center">
+         {reel.videoUrl ? (
+            <video 
+               ref={videoRef}
+               src={reel.videoUrl}
+               className="w-full h-full object-cover"
+               loop
+               playsInline
+            />
+         ) : (
+            <div className="w-full h-full flex items-center justify-center bg-zinc-800">
+               <Play size={48} className="text-white/20" />
+            </div>
+         )}
+
+         {/* Dim overlay for text readability */}
+         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/30 pointer-events-none" />
+
+         {/* Play/Pause invisible button covering the screen */}
+         <button className="absolute inset-0 w-full h-full z-10 outline-none flex items-center justify-center" onClick={togglePlay}>
+            {!isPlaying && (
+               <div className="w-20 h-20 bg-black/40 backdrop-blur rounded-full flex items-center justify-center text-white transition-opacity">
+                   <Play size={40} className="fill-current text-white ml-2" />
+               </div>
+            )}
+         </button>
+
+         {/* Floating Actions Right */}
+         <div className="absolute right-4 bottom-28 flex flex-col items-center gap-6 z-20">
+            <button className="flex flex-col items-center gap-1 active:scale-95 transition-transform group outline-none">
+               <div className="w-12 h-12 rounded-full bg-black/20 backdrop-blur flex items-center justify-center text-white">
+                 <Heart size={28} className="group-hover:fill-current" />
+               </div>
+               <span className="text-white font-bold text-[0.75rem] text-shadow">{reel.likedBy?.length || 0}</span>
+            </button>
+
+            <button 
+                onClick={(e) => { e.stopPropagation(); router.push(`/product/${reel.id}`); }}
+                className="flex flex-col items-center gap-1 active:scale-95 transition-transform outline-none"
+            >
+               <div className="w-12 h-12 rounded-full bg-black/20 backdrop-blur flex items-center justify-center text-white">
+                 <MessageSquare size={26} />
+               </div>
+               <span className="text-white font-bold text-[0.75rem] text-shadow">Comentários</span>
+            </button>
+
+            <button 
+                onClick={(e) => { e.stopPropagation(); shareContent(reel.name, reel.description, `${window.origin}/short/${reel.id}`); }}
+                className="flex flex-col items-center gap-1 active:scale-95 transition-transform outline-none"
+            >
+               <div className="w-12 h-12 rounded-full bg-black/20 backdrop-blur flex items-center justify-center text-white">
+                 <Share2 size={26} />
+               </div>
+               <span className="text-white font-bold text-[0.75rem] text-shadow">Partilhar</span>
+            </button>
+            <button className="flex flex-col items-center gap-1 active:scale-95 transition-transform outline-none">
+               <div className="w-12 h-12 rounded-full bg-black/20 backdrop-blur flex items-center justify-center text-white">
+                 <MoreVertical size={26} />
+               </div>
+            </button>
+         </div>
+
+         {/* Floating Info Bottom */}
+         <div className="absolute left-4 bottom-6 right-20 flex flex-col gap-2 z-20 pointer-events-none">
+            <div className="flex items-center gap-2 pointer-events-auto cursor-pointer" onClick={() => router.push(`/user/${reel.sellerId}`)}>
+               <img src={reel.sellerAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${reel.sellerId}`} className="w-10 h-10 rounded-full border border-white/20 shadow-md object-cover" alt="Profile" />
+               <span className="text-white font-bold text-[0.9375rem] text-shadow">{reel.sellerName || 'Vendedor'}</span>
+               <button className="bg-transparent border border-white text-white px-2 py-0.5 rounded text-[0.625rem] font-bold uppercase tracking-widest ml-2">Seguir</button>
+            </div>
+            <h2 className="text-white font-bold text-[1rem] leading-tight text-shadow line-clamp-2 mt-1">{reel.name}</h2>
+            {reel.description && <p className="text-white/90 text-[0.875rem] line-clamp-2 leading-snug">{reel.description}</p>}
+            
+            <div className="flex items-center gap-2 mt-2">
+               <div className="px-2 py-1 bg-white/20 backdrop-blur rounded-[4px] text-[0.625rem] text-white font-bold uppercase tracking-widest">
+                  {reel.price} MT
+               </div>
+               <p className="text-white/60 text-[0.75rem]">{reel.views || 0} visualizações</p>
+            </div>
+         </div>
+      </div>
+   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
-import { Menu, Search, ShoppingCart, ArrowLeft, Share2, MoreVertical, Settings, LifeBuoy, HelpCircle, MessageSquare, X } from 'lucide-react';
+import { Menu, Search, ArrowLeft, Share2, MoreVertical, Settings, LifeBuoy, HelpCircle, MessageSquare, X } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -11,7 +11,7 @@ interface TopBarProps {
   rightElement?: React.ReactNode;
 }
 
-export default function TopBar({ showBack, title = "BOLADAS", rightElement }: TopBarProps) {
+export default function TopBar({ showBack, title = "Boladas", rightElement }: TopBarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -32,23 +32,16 @@ export default function TopBar({ showBack, title = "BOLADAS", rightElement }: To
     <>
       <header className="fixed top-0 w-full z-50 bg-black flex justify-between items-center px-4 h-12">
         <div className="flex items-center gap-4">
-          {showBack ? (
+          {showBack && (
             <button 
               onClick={handleBack}
-              className="text-primary hover:bg-surface-container-highest transition-colors p-1 rounded active:scale-95"
+              className="text-white hover:bg-surface-container-highest transition-colors p-1 rounded active:scale-95"
             >
-              <ArrowLeft size={20} strokeWidth={3} />
-            </button>
-          ) : (
-            <button 
-              onClick={handleMenuClick}
-              className="text-primary hover:bg-surface-container-highest transition-colors p-1 rounded active:scale-95"
-            >
-              <Menu size={20} strokeWidth={3} />
+              <ArrowLeft size={24} strokeWidth={2.5} />
             </button>
           )}
           <h1 
-            className="text-lg font-black text-primary uppercase tracking-tighter cursor-pointer"
+            className="text-2xl font-bold text-white tracking-tight cursor-pointer"
             onClick={() => router.push('/')}
           >
             {title}
@@ -60,23 +53,31 @@ export default function TopBar({ showBack, title = "BOLADAS", rightElement }: To
           ) : (
             <>
               {pathname === '/' && (
-                <button className="text-primary hover:bg-surface-container-highest transition-colors p-1 rounded active:scale-95">
-                  <Search size={20} strokeWidth={3} />
+                <button 
+                  onClick={() => router.push('/search')}
+                  className="text-white hover:bg-surface-container-highest transition-colors p-1 rounded active:scale-95"
+                >
+                  <Search size={24} strokeWidth={2.5} />
                 </button>
               )}
               {showBack && (
                 <>
-                  <button className="text-primary hover:bg-surface-container-highest transition-colors p-1 rounded active:scale-95">
-                    <Share2 size={20} strokeWidth={3} />
+                  <button className="text-white hover:bg-surface-container-highest transition-colors p-1 rounded active:scale-95">
+                    <Share2 size={24} strokeWidth={2.5} />
                   </button>
-                  <button className="text-primary hover:bg-surface-container-highest transition-colors p-1 rounded active:scale-95">
-                    <MoreVertical size={20} strokeWidth={3} />
+                  <button className="text-white hover:bg-surface-container-highest transition-colors p-1 rounded active:scale-95">
+                    <MoreVertical size={24} strokeWidth={2.5} />
                   </button>
                 </>
               )}
-              <button className="text-primary hover:bg-surface-container-highest transition-colors p-1 rounded active:scale-95">
-                <ShoppingCart size={20} strokeWidth={3} />
-              </button>
+              {!showBack && (
+                <button 
+                  onClick={handleMenuClick}
+                  className="text-white hover:bg-surface-container-highest transition-colors p-1 rounded active:scale-95"
+                >
+                  <Menu size={24} strokeWidth={2.5} />
+                </button>
+              )}
             </>
           )}
         </div>
@@ -97,29 +98,29 @@ export default function TopBar({ showBack, title = "BOLADAS", rightElement }: To
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="fixed top-0 left-0 h-full w-3/4 max-w-sm bg-surface z-[70] shadow-2xl flex flex-col"
+              className="fixed top-0 left-0 h-full w-max max-w-[85vw] bg-surface z-[70] shadow-2xl flex flex-col pt-safe-top"
             >
               <div className="p-4 flex justify-between items-center border-b border-outline-variant/10">
-                <h2 className="text-lg font-black text-primary uppercase tracking-tighter">BOLADAS</h2>
-                <button onClick={closeDrawer} className="p-1 text-on-surface-variant hover:text-primary transition-colors">
+                <h2 className="text-2xl font-bold text-white tracking-tight">Boladas</h2>
+                <button onClick={closeDrawer} className="p-1 text-on-surface-variant hover:text-white transition-colors ml-8">
                   <X size={20} />
                 </button>
               </div>
               <nav className="flex flex-col py-4">
                 <button onClick={() => { closeDrawer(); router.push('/settings'); }} className="flex items-center gap-4 px-6 py-4 hover:bg-surface-container-high transition-colors text-left">
-                  <Settings size={20} className="text-on-surface-variant" />
+                  <Settings size={20} strokeWidth={2.5} className="text-white shrink-0" />
                   <span className="text-[0.875rem] font-medium text-on-surface">Definições</span>
                 </button>
                 <button className="flex items-center gap-4 px-6 py-4 hover:bg-surface-container-high transition-colors text-left">
-                  <LifeBuoy size={20} className="text-on-surface-variant" />
+                  <LifeBuoy size={20} strokeWidth={2.5} className="text-white shrink-0" />
                   <span className="text-[0.875rem] font-medium text-on-surface">Suporte</span>
                 </button>
                 <button className="flex items-center gap-4 px-6 py-4 hover:bg-surface-container-high transition-colors text-left">
-                  <HelpCircle size={20} className="text-on-surface-variant" />
+                  <HelpCircle size={20} strokeWidth={2.5} className="text-white shrink-0" />
                   <span className="text-[0.875rem] font-medium text-on-surface">Ajuda</span>
                 </button>
                 <button className="flex items-center gap-4 px-6 py-4 hover:bg-surface-container-high transition-colors text-left">
-                  <MessageSquare size={20} className="text-on-surface-variant" />
+                  <MessageSquare size={20} strokeWidth={2.5} className="text-white shrink-0" />
                   <span className="text-[0.875rem] font-medium text-on-surface">Dar a sua opinião sobre o app</span>
                 </button>
               </nav>

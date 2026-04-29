@@ -93,6 +93,19 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path
   }
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+  console.error('Firestore Error: ', error instanceof Error ? error.message : String(error));
+  // Safely stringify to prevent circular reference errors
+  const safeStringify = (obj: any) => {
+    const cache = new Set();
+    return JSON.stringify(obj, (key, value) => {
+      if (typeof value === 'object' && value !== null) {
+        if (cache.has(value)) {
+          return '[Circular]';
+        }
+        cache.add(value);
+      }
+      return value;
+    });
+  };
+  throw new Error(safeStringify(errInfo));
 }

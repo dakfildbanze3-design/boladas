@@ -57,8 +57,8 @@ export default function PublicProfile() {
         try {
           const status = await checkIsFollowing(auth.currentUser.uid, id);
           setIsFollowing(status);
-        } catch (e) {
-          console.error(e);
+        } catch (e: any) {
+          console.error(e?.message || String(e));
         }
       }
     };

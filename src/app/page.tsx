@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { MoreVertical, Flag, Share2, Star, Link, X, Loader2, ShoppingBag, MessageSquare, Play } from 'lucide-react';
+import { MoreVertical, Flag, Share2, Star, Link, X, Loader2, ShoppingBag, MessageSquare, Play, Video } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
 import { db, handleFirestoreError, OperationType, auth } from '../lib/firebase';
@@ -11,7 +11,18 @@ import { shareContent } from '../lib/shareUtils';
 import { chatService } from '../services/chatService';
 import AdBanner from '../components/AdBanner';
 
-const categories = ['TUDO', 'SAPATILHAS', 'ACESSÓRIOS', 'ROUPAS', 'SERVIÇOS', 'ELETRÔNICOS'];
+const categories = ['Tudo', 'Sapatilhas', 'Acessórios', 'Roupas', 'Serviços', 'Eletrônicos', 'Automóveis'];
+
+const formatViews = (views: number) => {
+  if (!views) return '0';
+  if (views >= 1000000) {
+    return (views / 1000000).toFixed(1).replace('.', ',') + ' mi';
+  }
+  if (views >= 1000) {
+    return (views / 1000).toFixed(0) + ' mil';
+  }
+  return views.toString();
+};
 
 export default function Home() {
   const router = useRouter();
@@ -61,7 +72,7 @@ export default function Home() {
   const [loadingMore, setLoadingMore] = useState(false);
   
   // Filter & Pagination States
-  const [activeCategory, setActiveCategory] = useState<string>('TUDO');
+  const [activeCategory, setActiveCategory] = useState<string>('Tudo');
   const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot | null>(null);
   const [hasMore, setHasMore] = useState(true);
   
@@ -78,8 +89,8 @@ export default function Home() {
           if (docSnap.exists() && docSnap.data().hideShorts) {
             setHideShorts(true);
           }
-        } catch (error) {
-          console.error(error);
+        } catch (error: any) {
+          console.error(error?.message || String(error));
         }
       }
     };
@@ -133,7 +144,7 @@ export default function Home() {
     try {
       const constraints: any[] = [];
 
-      if (activeCategory !== 'TUDO') {
+      if (activeCategory !== 'Tudo') {
         constraints.push(where('category', '==', activeCategory));
       }
 
@@ -231,8 +242,8 @@ export default function Home() {
             <div 
               key={cat}
               onClick={() => setActiveCategory(cat)}
-              className={`flex-shrink-0 px-4 py-2 rounded-[6px] text-[0.625rem] font-bold uppercase tracking-widest cursor-pointer transition-all active:scale-95 text-center
-                ${activeCategory === cat ? 'bg-zinc-900 text-white shadow-sm' : 'bg-surface-container text-on-surface-variant'}
+              className={`flex-shrink-0 px-4 py-2 rounded-[6px] text-sm font-bold cursor-pointer transition-all active:scale-95 text-center
+                ${activeCategory === cat ? 'bg-white text-zinc-900 shadow-sm' : 'bg-zinc-800 text-white hover:bg-zinc-700'}
               `}
             >
               {cat}
@@ -241,18 +252,20 @@ export default function Home() {
         </div>
       </motion.section>
 
-      {/* Destaques / Featured Cards */}
-      {!loading && !hideShorts && products.length > 0 && products.some(p => p.productType === 'short' || p.videoUrl) && (
-        <section className="px-[4px] pt-1 pb-2 bg-surface">
-          <div className="flex items-center justify-between w-full px-2 py-3">
+      {/* Featured Shorts Shelf */}
+      {!loading && !hideShorts && products.some(p => p.productType === 'short') && (
+        <section className="bg-surface pb-4 border-b border-outline-variant/10">
+          <div className="flex items-center justify-between w-full px-4 py-3">
             <div className="flex items-center gap-2">
-              <Play size={20} className="text-blue-500" fill="currentColor" />
+              <div className="w-6 h-6 bg-[#007AFF] rounded-full flex items-center justify-center">
+                <Play size={14} className="text-white fill-current" />
+              </div>
               <h2 className="text-[20px] font-bold text-on-surface tracking-tight">Shorts</h2>
             </div>
             <div className="relative">
               <button 
-                onClick={() => setShowHideShortsPopup(!showHideShortsPopup)} 
-                className="text-white hover:text-gray-300 active:scale-95 transition-all outline-none"
+                onClick={() => setHideShorts(true)} 
+                className="text-white active:scale-95 transition-all outline-none"
               >
                 <X size={20} strokeWidth={3} />
               </button>
@@ -260,9 +273,9 @@ export default function Home() {
               <AnimatePresence>
                 {showHideShortsPopup && (
                   <motion.div
-                    initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                    initial={{ opacity: 0, scale: 0.9, y: 5 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.9, y: 10 }}
+                    exit={{ opacity: 0, scale: 0.9, y: 5 }}
                     className="absolute right-0 top-8 z-50 overflow-hidden"
                   >
                     <button 
@@ -277,12 +290,13 @@ export default function Home() {
               </AnimatePresence>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-[4px]">
-            {products.filter((p: any) => p.productType === 'short' || p.videoUrl).slice(0, 2).map((product: any) => (
+          
+          <div className="grid grid-cols-2 gap-[5px] px-[5px]">
+            {products.filter((p: any) => p.productType === 'short').map((product: any) => (
               <div 
-                key={`featured-${product.id}`}
+                key={`short-${product.id}`}
                 onClick={() => router.push(`/short/${product.id}`)}
-                className="relative w-full h-[300px] rounded-[10px] overflow-hidden cursor-pointer group bg-surface-container"
+                className="w-full h-[350px] rounded-[12px] overflow-hidden cursor-pointer relative bg-zinc-900 group"
               >
                 {product.videoUrl ? (
                   <video 
@@ -293,22 +307,21 @@ export default function Home() {
                     playsInline
                   />
                 ) : (
-                  <img 
-                    src={product.image || product.images?.[0]} 
-                    alt={product.name} 
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    referrerPolicy="no-referrer"
-                  />
+                  <div className="w-full h-full flex items-center justify-center bg-zinc-800">
+                    <Play size={24} className="text-white/30" />
+                  </div>
                 )}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
-                <div className="absolute bottom-0 left-0 w-full p-3">
-                  <h3 className="text-white text-[0.875rem] leading-tight line-clamp-2 mb-1">
-                    <span className="font-bold">{product.name}</span> - <span className="font-normal opacity-90">{product.description}</span>
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
+                <div className="absolute bottom-0 left-0 w-full p-2.5">
+                  <h3 className="text-white text-[11px] font-bold leading-tight line-clamp-3">
+                    {product.name}
+                    {product.description && (
+                      <span className="font-normal opacity-90 ml-1">
+                        - {product.description}
+                      </span>
+                    )}
                   </h3>
-                  <p className="text-white/80 text-[0.6875rem] font-medium uppercase tracking-wider">{product.views || '0'} visualizações</p>
-                </div>
-                <div className="absolute top-2 right-2 bg-primary text-on-primary text-[0.625rem] font-black px-2 py-0.5 rounded-[2px] uppercase flex items-center gap-1">
-                  🔥 VIDEO
+                  <p className="text-white/60 text-[9px] mt-1 font-medium">{formatViews(product.views)} visualizações</p>
                 </div>
               </div>
             ))}
@@ -316,30 +329,27 @@ export default function Home() {
         </section>
       )}
 
-      {/* AdBanner before Product Feed */}
-      <AdBanner dataAdSlot="6870833164" />
-
-      {/* Product Feed */}
-      <div className="flex flex-col gap-[3px] bg-background">
+      {/* Main Video Feed */}
+      <div className="flex flex-col bg-background gap-[5px]">
         {loading ? (
           <div className="py-12 flex justify-center">
             <Loader2 size={32} className="animate-spin text-zinc-800" />
           </div>
-        ) : products.filter((p: any) => !p.videoUrl && p.productType !== 'short').length === 0 ? (
+        ) : products.filter((p: any) => p.productType !== 'short').length === 0 ? (
           <div className="py-12 px-6 flex flex-col items-center text-center text-on-surface-variant">
             <div className="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mb-4">
-              <ShoppingBag size={24} className="text-on-surface-variant/50" />
+              <Video size={24} className="text-on-surface-variant/50" />
             </div>
-            <h3 className="font-bold text-on-surface uppercase tracking-widest text-[0.875rem] mb-2">Nada por aqui!</h3>
+            <h3 className="font-bold text-on-surface uppercase tracking-widest text-[0.875rem] mb-2">Sem vídeos ainda</h3>
             <p className="text-[0.75rem] max-w-[200px] leading-relaxed opacity-80">
-              Não encontramos produtos para apresentar nesta categoria agora. Tente procurar outra categoria.
+              Nenhum vídeo publicado nesta categoria até o momento.
             </p>
           </div>
         ) : (
           <>
-            {products.filter((p: any) => !p.videoUrl && p.productType !== 'short').map((product, index) => (
+            {products.filter((p: any) => p.productType !== 'short').map((product, index) => (
               <React.Fragment key={product.id}>
-                <ProductItem 
+                <VideoCard 
                   product={product}
                   onClick={() => router.push(`/product/${product.id}`)}
                   onMoreClick={(id, e) => {
@@ -348,15 +358,16 @@ export default function Home() {
                   }}
                 />
                 
-                {/* Insert Ad every 8 items */}
-                {(index + 1) % 8 === 0 && (
-                  <div className="bg-surface py-2">
+                {/* Insert Ad every 6 items */}
+                {(index + 1) % 6 === 0 && (
+                  <div className="bg-surface py-2 border-b border-outline-variant/10">
                     <p className="text-center text-[0.625rem] text-on-surface-variant/50 uppercase tracking-widest mb-2">Publicidade</p>
                     <AdBanner dataAdSlot="6870833164" />
                   </div>
                 )}
               </React.Fragment>
             ))}
+            
             
             {/* Infinite Scroll Loader Target */}
             <div ref={lastElementRef} className="py-8 flex justify-center bg-background">
@@ -437,8 +448,8 @@ export default function Home() {
   );
 }
 
-// Memoized Product Item to prevent unnecessary re-renders during scroll/state updates
-const ProductItem = React.memo(({ product, onMoreClick, onClick }: { 
+// Memoized Video Card Item (YouTube Style)
+const VideoCard = React.memo(({ product, onMoreClick, onClick }: { 
   product: any, 
   onMoreClick: (id: string, e: React.MouseEvent) => void,
   onClick: () => void 
@@ -446,64 +457,72 @@ const ProductItem = React.memo(({ product, onMoreClick, onClick }: {
   return (
     <article 
       onClick={onClick}
-      className="bg-surface pb-4 cursor-pointer"
+      className="bg-surface pb-3 cursor-pointer overflow-hidden border-b border-outline-variant/5"
     >
-      {/* Image */}
-      <div className="w-full aspect-square bg-surface-container-low relative">
-        <img 
-          src={product.image} 
-          alt={product.name} 
-          className="w-full h-full object-cover"
-          referrerPolicy="no-referrer"
-        />
-        {product.discount && (
-          <div className="absolute top-3 left-3 bg-error text-on-error text-[0.625rem] font-black px-2 py-1 rounded-[2px]">
-            {product.discount}
+      {/* Thumbnail */}
+      <div className="w-full aspect-video bg-zinc-900 relative">
+        {product.videoUrl ? (
+          <video 
+            src={product.videoUrl} 
+            className="w-full h-full object-cover"
+            muted
+            loop
+            playsInline
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center bg-zinc-800">
+            <Play size={32} className="text-white/30" />
           </div>
         )}
-      </div>
-      
-      {/* Content */}
-      <div className="px-4 mt-3 flex gap-3">
-        <div className="flex-1">
-          <p className="text-[0.9375rem] text-on-surface line-clamp-3 leading-snug mb-2">
-            <span className="font-bold">{product.name}</span>
-            {" - "}
-            <span className="text-on-surface-variant/80">{product.description}</span>
-          </p>
-          
-          <div className="flex items-center gap-3 mb-2 opacity-90">
-             <span className="text-[0.875rem] font-black text-zinc-800">{product.price} MT</span>
-             <div className="flex items-center gap-1 text-on-surface-variant text-[0.625rem] font-bold">
-               <Star size={10} className="fill-on-surface-variant" /> {product.likesCount || 0}
-             </div>
-             <div className="flex items-center gap-1 text-on-surface-variant text-[0.625rem] font-bold">
-               <MessageSquare size={10} className="fill-on-surface-variant"/> {product.commentsCount || 0}
-             </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <img 
-              src={product.avatar} 
-              alt="Avatar" 
-              className="w-5 h-5 rounded-full object-cover border border-outline-variant/10"
-              referrerPolicy="no-referrer"
-            />
-            <span className="text-[0.75rem] font-medium text-on-surface-variant">
-              {product.author} • {product.views || 0} visualizações • {product.time}
-            </span>
-          </div>
+        
+        {/* Status Badges */}
+        <div className="absolute top-2 left-2 flex gap-1">
+          {product.discount && (
+            <div className="bg-red-600 text-white text-[10px] font-black px-1.5 py-0.5 rounded-[2px] uppercase">
+              OFERTA
+            </div>
+          )}
         </div>
 
+        {/* Video Duration Mock */}
+        <div className="absolute bottom-2 right-2 bg-black/80 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-[2px]">
+          {product.duration || '5:33'}
+        </div>
+      </div>
+      
+      {/* Footer Info */}
+      <div className="px-3 py-3 flex gap-3">
         <div 
-          className="flex-shrink-0 text-on-surface-variant p-1 -mr-1 cursor-pointer hover:bg-surface-container-highest rounded-full transition-colors active:scale-95 self-start"
-          onClick={(e) => onMoreClick(product.id, e)}
+          className="flex-shrink-0"
+          onClick={(e) => {
+            e.stopPropagation();
+            // Optional: navigate to profile
+          }}
         >
-          <MoreVertical size={18} />
+          <img 
+            src={product.avatar} 
+            alt={product.author} 
+            className="w-10 h-10 rounded-full object-cover border border-outline-variant/10 shadow-sm"
+            referrerPolicy="no-referrer"
+          />
+        </div>
+        
+        <div className="mt-1 flex-1 flex flex-col min-w-0">
+          <h3 className="text-[16px] font-bold text-on-surface line-clamp-3 leading-tight break-words">
+            {product.name}
+            {product.description && (
+              <span className="text-on-surface-variant text-[14px] font-normal ml-1">
+                - {product.description}
+              </span>
+            )}
+          </h3>
+          <p className="text-[12px] text-on-surface-variant font-medium mt-1 truncate">
+            {product.author} • {formatViews(product.views)} visualizações • {product.time}
+          </p>
         </div>
       </div>
     </article>
   );
 });
 
-ProductItem.displayName = 'ProductItem';
+VideoCard.displayName = 'VideoCard';

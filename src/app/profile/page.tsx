@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Verified, Grid, PlusCircle, Loader2, LogOut } from 'lucide-react';
+import { Verified, Grid, PlusCircle, Loader2, LogOut, Play } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useRouter } from 'next/navigation';
 import { auth, db, handleFirestoreError, OperationType } from '../../lib/firebase';
@@ -149,16 +149,23 @@ export default function ProfilePage() {
               {recentProducts.map((product) => (
                 <div 
                   key={product.id}
-                  onClick={() => router.push(`/product/${product.id}`)}
+                  onClick={() => router.push(product.productType === 'short' ? `/short/${product.id}` : `/product/${product.id}`)}
                   className="w-[120px] flex-shrink-0 cursor-pointer group"
                 >
-                  <div className="aspect-[3/4] rounded-[3px] overflow-hidden bg-surface-container mb-2 relative">
-                    <img 
-                      src={product.images?.[0] || 'https://picsum.photos/seed/placeholder/800/800'} 
-                      alt={product.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                      referrerPolicy="no-referrer"
-                    />
+                  <div className="aspect-[3/4] rounded-[3px] overflow-hidden bg-zinc-900 mb-2 relative">
+                    {product.videoUrl ? (
+                      <video 
+                        src={product.videoUrl} 
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        muted
+                        loop
+                        playsInline
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-zinc-800">
+                        <Play size={24} className="text-white/30" />
+                      </div>
+                    )}
                     <div className="absolute top-2 left-2 bg-primary/90 text-on-primary text-[0.6rem] font-bold px-1.5 py-0.5 rounded-[2px] uppercase">
                       Novo
                     </div>
@@ -183,15 +190,22 @@ export default function ProfilePage() {
         {myProducts.map((product) => (
           <div 
             key={product.id}
-            onClick={() => router.push(`/product/${product.id}`)}
-            className="bg-surface aspect-square relative group cursor-pointer"
+            onClick={() => router.push(product.productType === 'short' ? `/short/${product.id}` : `/product/${product.id}`)}
+            className="bg-zinc-900 aspect-square relative group cursor-pointer"
           >
-            <img 
-              className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" 
-              src={product.images?.[0] || 'https://picsum.photos/seed/placeholder/800/800'} 
-              alt={product.name}
-              referrerPolicy="no-referrer"
-            />
+            {product.videoUrl ? (
+              <video 
+                className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" 
+                src={product.videoUrl} 
+                muted
+                loop
+                playsInline
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center bg-zinc-800">
+                <Play size={24} className="text-white/30" />
+              </div>
+            )}
             <div className="absolute bottom-0 left-0 w-full p-3 bg-gradient-to-t from-black/80 to-transparent">
               <div className="text-[0.625rem] uppercase text-primary mb-1">{product.price} MT</div>
               <div className="text-[0.75rem] font-medium text-on-surface truncate">{product.name}</div>

@@ -18,9 +18,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js').then((registration) => {
-          console.log('SW registered: ', registration);
+          console.log('SW registered.');
         }).catch((registrationError) => {
-          console.log('SW registration failed: ', registrationError);
+          console.log('SW registration failed: ', registrationError?.message || String(registrationError));
         });
       });
     }
@@ -48,6 +48,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const isSell = pathname === '/sell';
   const isSellVideo = pathname === '/sell-video';
   const isShortPlayer = pathname.startsWith('/short/');
+  const isSearch = pathname === '/search';
+  const isChat = pathname.startsWith('/chat');
   const isAuthPage = ['/login', '/register', '/profile-setup'].includes(pathname);
 
   if (loading) {
@@ -60,14 +62,14 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
   return (
     <div className="min-h-screen bg-background text-on-surface">
-      {!isAuthPage && !isShortPlayer && (
+      {!isAuthPage && !isShortPlayer && !isSearch && !isSell && !isChat && (
         <TopBar 
-          showBack={isProductDetail || isPublicProfile || isSettings || isSell || isSellVideo} 
-          title={isProductDetail ? "PRODUTO" : isPublicProfile ? "PERFIL" : isSettings ? "DEFINIÇÕES" : isSell ? "VENDER" : isSellVideo ? "VENDER VIDEO" : "BOLADAS"}
-          rightElement={(isSell || isSellVideo) ? (
+          showBack={isProductDetail || isPublicProfile || isSettings || isSellVideo} 
+          title={isProductDetail ? "PRODUTO" : isPublicProfile ? "PERFIL" : isSettings ? "DEFINIÇÕES" : isSellVideo ? "VENDER VIDEO" : "Boladas"}
+          rightElement={(isSellVideo) ? (
             <button 
               onClick={() => {
-                const form = document.getElementById(isSell ? 'sell-form' : 'sell-video-form') as HTMLFormElement;
+                const form = document.getElementById('sell-video-form') as HTMLFormElement;
                 if (form) form.requestSubmit();
               }}
               className="text-[#007AFF] font-bold text-[0.875rem] px-2 py-1 active:opacity-50 transition-opacity"
@@ -82,7 +84,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         {children}
       </main>
 
-      {!isProductDetail && !isAuthPage && !isShortPlayer && <BottomNav />}
+      {!isProductDetail && !isAuthPage && !isShortPlayer && !isSell && !isChat && <BottomNav />}
     </div>
   );
 }
